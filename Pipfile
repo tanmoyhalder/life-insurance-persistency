@@ -19,6 +19,7 @@ prefect = "*"
 flask = "*"
 jsonify = "*"
 requests = "*"
+pyarrow = "*"
 
 [dev-packages]
 pytest = "*"
