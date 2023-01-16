@@ -1,0 +1,44 @@
+###
+### A complete description of a Prefect Deployment for flow 'main'
+###
+name: local
+description: null
+version: 1652978049315a7505b201747a770ea1
+# The work queue that will handle this deployment's runs
+work_queue_name: default
+tags:
+- mlflow
+parameters: {}
+schedule:
+  interval: 300.0
+  anchor_date: '2023-01-16T15:02:03.430469+00:00'
+  timezone: UTC
+infra_overrides: {}
+
+###
+### DO NOT EDIT BELOW THIS LINE
+###
+flow_name: main
+manifest_path: null
+infrastructure:
+  type: process
+  env: {}
+  labels: {}
+  name: null
+  command: null
+  stream_output: true
+  working_dir: null
+  _block_document_id: 915887c4-3915-4be0-9cae-dbae644bad9c
+  _block_document_name: anonymous-1c3304ac-3b42-46ff-888b-594194118d14
+  _is_anonymous: true
+  block_type_slug: process
+  _block_type_slug: process
+storage: null
+path: C:\Users\AJ786UD\OneDrive - EY\Documents\Projects\Life Insurance\Persistency\orchestration
+entrypoint: prefect_deployment.py:main
+parameter_openapi_schema:
+  title: Parameters
+  type: object
+  properties: {}
+  required: null
+  definitions: null

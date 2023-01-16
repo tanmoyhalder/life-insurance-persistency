@@ -1,25 +1,37 @@
 import os
 import warnings
 warnings.simplefilter("ignore", UserWarning)
+
 import numpy as np
 import pandas as pd
 pd.set_option('display.max_columns', None)
+
 from datetime import datetime as dt
+from datetime import timedelta
 import pickle
+
 import mlflow
+
+from prefect import flow, task
+from prefect.task_runners import SequentialTaskRunner
+from prefect.filesystems import LocalFileSystem
+from prefect.deployments import Deployment
+from prefect.orion.schemas.schedules import IntervalSchedule
+
 from feature_engine import encoding as ce
 from feature_engine import imputation as mdi
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
+
 import xgboost as xgb
+
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 from hyperopt.pyll import scope
-from sklearn.metrics import roc_auc_score, classification_report, confusion_matrix, accuracy_score, recall_score, precision_score, f1_score
-import sklearn.metrics as metrics
 
-mlflow.set_tracking_uri("sqlite:///mlflow.db")
-mlflow.set_experiment("persistency-prediction-experiment")
+from sklearn.metrics import roc_auc_score, classification_report, confusion_matrix, accuracy_score, recall_score, precision_score, f1_score
+
+
 
 INPUT_FILEPATH = 'data'
 INPUT_FILENAME = 'input_data.parquet'
@@ -45,7 +57,7 @@ RANDOM_STATE = 786
 TEST_SIZE = 0.3
 
 
-
+@task
 def read_data(INPUT_FILEPATH, INPUT_FILENAME) -> pd.DataFrame:
     input_df = pd.read_parquet(os.path.join(INPUT_FILEPATH, INPUT_FILENAME),engine = 'pyarrow')
     input_df = input_df.set_index(INDEX_COL)
@@ -54,7 +66,7 @@ def read_data(INPUT_FILEPATH, INPUT_FILENAME) -> pd.DataFrame:
     
     return input_df
 
-
+@task
 def create_features(df) -> pd.DataFrame:
     df['time_to_issue'] = (df['policy_issue_date'] - df['proposal_received_date']).dt.days
     df['prem_to_income_ratio'] = np.where(df['income'] == 0, 0, (df['annual_premium']/df['income']))
@@ -62,14 +74,14 @@ def create_features(df) -> pd.DataFrame:
 
     return df
 
-
+@task
 def clean_data(df)  -> pd.DataFrame:
     df = df.drop(COLS_TO_REM, axis = 1)
     print(df.shape)
 
     return df
 
-
+@task
 def crate_train_test(df) -> pd.DataFrame:
 
     X_train, X_test, y_train, y_test = train_test_split(df[FEATURES],
@@ -89,14 +101,11 @@ def crate_train_test(df) -> pd.DataFrame:
     ('normalisation', StandardScaler())])
 
     X_train_trf = model_input_pipe.fit_transform(X_train)
-    X_test_trf = model_input_pipe.transform(X_test)
+    X_test_trf = model_input_pipe.transform(X_test) 
 
-    train = xgb.DMatrix(X_train_trf, label = y_train)
-    valid = xgb.DMatrix(X_test_trf, label = y_test) 
+    return X_train_trf, X_test_trf,  y_train, y_test, model_input_pipe
 
-    return train, valid,  y_train, y_test, model_input_pipe
-
-
+@task
 def train_model_search(train, valid, y_test):
 
     def objective(params):
@@ -153,7 +162,7 @@ def train_model_search(train, valid, y_test):
 
     return
 
-
+@task
 def train_best_model(train, valid, y_test, model_input_pipe):
     
     with mlflow.start_run():
@@ -177,7 +186,7 @@ def train_best_model(train, valid, y_test, model_input_pipe):
         xgbooster = xgb.train(
                             params = best_params,
                             dtrain = train,
-                            num_boost_round = 1000,
+                            num_boost_round = 100,
                             evals = [(valid, "validation")],
                             early_stopping_rounds = 50)
 
@@ -207,13 +216,30 @@ def train_best_model(train, valid, y_test, model_input_pipe):
     mlflow.end_run()
 
 
-if __name__ == "__main__":
+@flow(task_runner = SequentialTaskRunner())
+def main():
+    # local_file_system_block = LocalFileSystem.load("mlflow-storage-local")
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")
+    mlflow.set_experiment("persistency-prediction-experiment")
     input_df = read_data(INPUT_FILEPATH, INPUT_FILENAME)
     temp_df = create_features(input_df)
     clean_df = clean_data(temp_df)
-    train, valid, y_train, y_test, model_input_pipe = crate_train_test(clean_df)
-    train_model_search(train, valid, y_test)
+    X_train_trf, X_test_trf, y_train, y_test, model_input_pipe = crate_train_test(clean_df)
+    train = xgb.DMatrix(X_train_trf, label = y_train)
+    valid = xgb.DMatrix(X_test_trf, label = y_test)
+    # train_model_search(train, valid, y_test)
     train_best_model(train, valid, y_test, model_input_pipe)
+
+deployment = Deployment.build_from_flow(
+    flow=main,
+    name="local",
+    schedule= IntervalSchedule(interval=timedelta(minutes=5)),
+    tags = ["mlflow"]
+)
+
+deployment.apply()
+
+
 
 
 
