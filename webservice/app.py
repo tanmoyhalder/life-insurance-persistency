@@ -21,9 +21,13 @@ st.set_page_config(layout="wide")
 LOGGED_MODEL = 'model_config'
 LOOKUP_TABLE_PATH = 'lookup_table'
 NA_VALUES = ['', 'NA', 'N/A', 'NULL', 'null', '?', '*', '#N/A', '#VALUE!']
+POLICY_DTYPE_DICT = {'policy_number': 'str'}
+DATE_COLS = ['proposal_received_date', 'policy_issue_date']
+NA_VALUES = ['', 'NA', 'N/A', 'NULL', 'null', '?', '*', '#N/A', '#VALUE!']
 AGENT_DTYPE_DICT = {'agent_code': 'str'}
 ZIPCODE_DTYPE_DICT = {'zipcode': 'str'}
-COLS_TO_REM = ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code', 'agent_dob', 'agent_doj']
+COLS_TO_REM_ONLINE = ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code', 'agent_dob', 'agent_doj']
+COLS_TO_REM_BATCH = ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code']
 MISSING_COLS = ['agent_persistency']
 ONE_HOT_COLS = ['owner_gender', 'marital_status', 'smoker', 'medical', 'education', 'occupation', 'payment_freq',  
                 'agent_status', 'agent_education']
@@ -39,12 +43,22 @@ def load_model():
 
     return xgboost_model, model_input_pipe
 
-def load_lookup_table():
+def load_non_policy_lookup_table():
 
     agent_tbl = pd.read_csv(os.path.join(LOOKUP_TABLE_PATH, 'agent_data.csv'), dtype = AGENT_DTYPE_DICT)
     zipcode_tbl = pd.read_csv(os.path.join(LOOKUP_TABLE_PATH, 'zipcode_data.csv'), dtype = ZIPCODE_DTYPE_DICT)
 
     return agent_tbl, zipcode_tbl
+
+def load_policy_lookup_table():
+
+    policy_tbl = pd.read_csv(os.path.join(LOOKUP_TABLE_PATH, 'policy_data.csv'), 
+                                          dtype = POLICY_DTYPE_DICT,
+                                          na_values = NA_VALUES,
+                                          parse_dates = DATE_COLS,
+                                          dayfirst= True)
+
+    return policy_tbl
 
 
 def create_features(df) -> pd.DataFrame:
@@ -54,8 +68,13 @@ def create_features(df) -> pd.DataFrame:
     return df
 
 
-def clean_data(df)  -> pd.DataFrame:
-    df = df.drop(COLS_TO_REM, axis = 1)
+def clean_data_online(df)  -> pd.DataFrame:
+    df = df.drop(COLS_TO_REM_ONLINE, axis = 1)
+
+    return df
+
+def clean_data_batch(df)  -> pd.DataFrame:
+    df = df.drop(COLS_TO_REM_BATCH, axis = 1)
 
     return df
 
@@ -71,15 +90,26 @@ def get_key(val,my_dicts):
 		if val == value:
 			return key
 
-def create_final_input(preproc_df):
+def create_final_input_online(preproc_df):
 
-                agent_tbl, zipcode_tbl = load_lookup_table()
+                agent_tbl, zipcode_tbl = load_non_policy_lookup_table()
 
                 model_temp_df1 = preproc_df.merge(agent_tbl, how = 'inner', left_on = 'agent_code', right_on = 'agent_code')
                 model_temp_df2 = model_temp_df1.merge(zipcode_tbl, how = 'inner', left_on = 'zipcode', right_on = 'zipcode')
 
                 model_merge_df = create_features(model_temp_df2)
-                model_clean_df = clean_data(model_merge_df)
+                model_clean_df = clean_data_online(model_merge_df)
+
+                return model_clean_df
+
+def create_final_input_batch(policy_df, policy_tbl):
+
+                policy_tbl = load_policy_lookup_table()
+
+                model_merge_df1 = policy_df.merge(policy_tbl, how = 'inner', left_on = 'policy_number', right_on = 'policy_number').set_index('policy_number')
+
+                model_merge_df2 = create_features(model_merge_df1)
+                model_clean_df = clean_data_batch(model_merge_df2)
 
                 return model_clean_df
 
@@ -120,19 +150,19 @@ def main():
                                         ('Annually', 'Monthly', 'Quarterly'),
                                         help = "Please select a value from the dropdown.")
 
-            annual_premium = st.number_input("Annual Premium", min_value = 0, max_value = 100000,
+            annual_premium = st.number_input("Annual Premium", min_value = 0, max_value = 100000, value = 15000,
                                         help = "Please enter a number greater than 0.")
 
-            sum_insured = st.number_input("Total Sum Insured", min_value = 0, max_value = 10000000,
+            sum_insured = st.number_input("Total Sum Insured", min_value = 0, max_value = 10000000, value = 500000,
                                         help = "Please enter a number greater than 0.")
 
-            agent_code = st.text_input("8 Digit Agent Code", 
+            agent_code = st.text_input("8 Digit Agent Code", value = '60503862',
                                         help = "Please mention the 8 digit code of the agent. Please check agent database for details.")
                                         
 
         with col2:
 
-            owner_age = st.number_input("Age of the Policy Owner", min_value = 18, max_value = 80,
+            owner_age = st.number_input("Age of the Policy Owner", min_value = 18, max_value = 80, value = 35,
                                         help = "Please enter a number between 18 to 80 years.")
 
             owner_gender = st.selectbox("Gender of the Policy Owner",
@@ -151,16 +181,16 @@ def main():
                                     ('Sales','Housewife','Other Service','Military','Teacher','Accountant','Govt Service','Shop Owner','IT Service','Businessman','Lawyer','Construction','Student','Manager','Manufacturing','Agricultural','Professional','Doctor','Other Engineering','Unemployed','Retired'),
                                     help = "Please select a value from the dropdown.")
 
-            experience = st.slider("Work Experience of the Policy Owner (in Years)", min_value = 0, max_value = 60,
+            experience = st.slider("Work Experience of the Policy Owner (in Years)", min_value = 0, max_value = 60, value = 10,
                                         help = "Please select a number between 0 to 60 years.")
 
-            income = st.number_input("Annual Income of the Policy Owner", min_value = 0, max_value = 1000000000,
+            income = st.number_input("Annual Income of the Policy Owner", min_value = 0, max_value = 1000000000, value = 200000,
                                         help = "Please enter a number.")
 
-            credit_score = st.number_input("Credit Score of the Policy Owner", min_value = 300, max_value = 900,
+            credit_score = st.number_input("Credit Score of the Policy Owner", min_value = 300, max_value = 900, value = 650,
                                         help = "Please enter a number.")
 
-            zip_code = st.text_input("Residence Zipcode of the Policy Owner",
+            zip_code = st.text_input("Residence Zipcode of the Policy Owner", value = '76543',
                                         help = "Please enter the 5 digit zipcode.")
 
             family_member = st.number_input("Number of Family Member the Policy Owner", min_value = 0, max_value = 10,
@@ -225,7 +255,7 @@ def main():
 
             xgboost_model, model_input_pipe = load_model()
             
-            model_clean_df = create_final_input(preproc_df)
+            model_clean_df = create_final_input_online(preproc_df)
             model_trf_df = model_input_pipe.transform(model_clean_df)
             model_input = xgb.DMatrix(model_trf_df)
 
@@ -237,10 +267,47 @@ def main():
                 prediction = 0
 
             final_result = get_key(prediction, prediction_label)
-            st.success(final_result) 
-            st.success(f"The probability of the customer not paying the premium is {round(predicted_prob[0]*100,0)}%") 
+            if prediction == 1:
+                st.error(final_result)
+                st.error(f"The probability of the customer not paying the premium is {round(predicted_prob[0]*100,0)}%")
+            else:
+                st.success(final_result) 
+                st.success(f"The probability of the customer not paying the premium is {round(predicted_prob[0]*100,0)}%") 
         else:
             pass
+
+    else:
+
+        st.subheader("Prediction Service for a Batch of Customers")
+
+        file = st.file_uploader("Please Upload a File with Policy Numbers   (The algorithm will fetch details of all customers in this list from the database)",
+                                help = "Please see here for the required file format required in policy batch file upload.")
+
+        if st.button("Predict"):
+
+            xgboost_model, model_input_pipe = load_model()
+            policy_df = pd.read_csv(file, dtype = POLICY_DTYPE_DICT)
+
+            policy_tbl = load_policy_lookup_table()
+            model_clean_df = create_final_input_batch(policy_df, policy_tbl)
+            model_trf_df = model_input_pipe.transform(model_clean_df)
+            model_input = xgb.DMatrix(model_trf_df)
+
+            predicted_prob = np.round(xgboost_model.predict(model_input), 2)
+
+            predicted_prob_df = pd.DataFrame(predicted_prob, columns = ['probabilities'])
+
+            output_df = pd.concat([policy_df, predicted_prob_df], axis = 1)
+            output_df['policy_renewal_prediction'] = np.where(output_df['probabilities'] >= 0.5, "No", "Yes")
+
+            st.write(output_df)
+
+            # timestamp = pd.Timestamp.today()
+            st.download_button(label = 'Download CSV', data = output_df.to_csv(), mime = 'text/csv')
+
+        else:
+            pass
+        
                       
 if __name__ == "__main__":
     main()
