@@ -20,6 +20,8 @@ flask = "*"
 jsonify = "*"
 requests = "*"
 pyarrow = "*"
+streamlit = "*"
+shap = "*"
 
 [dev-packages]
 pytest = "*"

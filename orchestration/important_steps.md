@@ -24,6 +24,4 @@ The below command works
 
 source: https://github.com/anna-geller/prefect-deployment-patterns/blob/2530e57cc1769f4cdf8476ee795b762068fafb94/a_project_template/deploy_commands_local_fs.bash#L2
 
-I have set up an interval schedule of every 5 minutes. This will create a deployment flow
-
-You will see a clode snippet in the UI. Copy paste the same in your code.
+I have set up an interval schedule of every 5 minutes. This will create a deployment flow. The agent will look for the run and every 5 minute executethe same code. This is how we automate the workflow
