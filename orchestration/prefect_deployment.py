@@ -8,6 +8,9 @@ pd.set_option('display.max_columns', None)
 
 from datetime import datetime as dt
 from datetime import timedelta
+
+import pyarrow as pa
+import pyarrow.parquet as pq
 import pickle
 
 import mlflow
@@ -55,6 +58,10 @@ FEATURES = ['owner_age', 'owner_gender', 'marital_status', 'num_nominee', 'smoke
 TARGET = 'lapse'
 RANDOM_STATE = 786
 TEST_SIZE = 0.3
+
+TRACKING_URI = "sqlite:///mlflow.db"
+EXPERIMENT_NAME = "persistency-prediction-experiment"
+
 
 
 @task
@@ -106,7 +113,25 @@ def crate_train_test(df) -> pd.DataFrame:
     return X_train_trf, X_test_trf,  y_train, y_test, model_input_pipe
 
 @task
-def train_model_search(train, valid, y_test):
+def create_feature_table(model_input_pipe):
+
+        out_feature_list = []
+        model_final_features = model_input_pipe.get_feature_names_out(input_features= FEATURES)
+        
+        for f in range(0, len(model_final_features)):
+            feat = 'f' + str(f)
+            out_feature_list.append(feat)
+        
+        feat_df = pd.DataFrame(data = model_final_features, index = out_feature_list, columns= ['feature_names'])
+
+        return feat_df
+
+
+@task
+def train_model_search(X_train_trf, X_test_trf,  y_train, y_test):
+
+    train = xgb.DMatrix(X_train_trf, label = y_train)
+    valid = xgb.DMatrix(X_test_trf, label = y_test)
 
     def objective(params):
 
@@ -163,7 +188,10 @@ def train_model_search(train, valid, y_test):
     return
 
 @task
-def train_best_model(train, valid, y_test, model_input_pipe):
+def train_best_model(X_train_trf, X_test_trf,  y_train, y_test, model_input_pipe):
+
+    train = xgb.DMatrix(X_train_trf, label = y_train)
+    valid = xgb.DMatrix(X_test_trf, label = y_test)
     
     with mlflow.start_run():
 
@@ -209,8 +237,18 @@ def train_best_model(train, valid, y_test, model_input_pipe):
 
         with open("models/preprocessor.b", "wb") as f_out:
             pickle.dump(model_input_pipe, f_out)
+            
+        with open("models/X_train_trf.b", "wb") as f_out:
+            pickle.dump(X_train_trf, f_out)
+
+        feat_df = create_feature_table(model_input_pipe)
+
+        feat_df_table = pa.Table.from_pandas(feat_df)
+        pq.write_table(feat_df_table, 'models/feat_df.parquet')
 
         mlflow.log_artifact("models/preprocessor.b", artifact_path = "preprocessor")
+        mlflow.log_artifact("models/X_train_trf.b", artifact_path = "model_data")
+        mlflow.log_artifact("models/feat_df.parquet", artifact_path = "model_data")
         mlflow.xgboost.log_model(xgbooster, artifact_path= "model_mlflow")
 
     mlflow.end_run()
@@ -219,16 +257,13 @@ def train_best_model(train, valid, y_test, model_input_pipe):
 @flow(task_runner = SequentialTaskRunner())
 def main():
     # local_file_system_block = LocalFileSystem.load("mlflow-storage-local")
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")
-    mlflow.set_experiment("persistency-prediction-experiment")
+    mlflow.set_tracking_uri(TRACKING_URI)
+    mlflow.set_experiment(EXPERIMENT_NAME)
     input_df = read_data(INPUT_FILEPATH, INPUT_FILENAME)
     temp_df = create_features(input_df)
     clean_df = clean_data(temp_df)
     X_train_trf, X_test_trf, y_train, y_test, model_input_pipe = crate_train_test(clean_df)
-    train = xgb.DMatrix(X_train_trf, label = y_train)
-    valid = xgb.DMatrix(X_test_trf, label = y_test)
-    # train_model_search(train, valid, y_test)
-    train_best_model(train, valid, y_test, model_input_pipe)
+    train_best_model(X_train_trf, X_test_trf,  y_train, y_test, model_input_pipe)
 
 deployment = Deployment.build_from_flow(
     flow=main,

@@ -22,6 +22,8 @@ requests = "*"
 pyarrow = "*"
 streamlit = "*"
 shap = "*"
+lime = "*"
+pillow = "*"
 
 [dev-packages]
 pytest = "*"

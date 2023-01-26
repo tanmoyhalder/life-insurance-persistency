@@ -3,15 +3,17 @@
 ###
 name: local
 description: null
-version: 1652978049315a7505b201747a770ea1
+version: 993522f470b877568298ea375dd4b103
 # The work queue that will handle this deployment's runs
 work_queue_name: default
+work_pool_name: null
+work_pool_queue_name: null
 tags:
 - mlflow
 parameters: {}
 schedule:
   interval: 300.0
-  anchor_date: '2023-01-16T15:02:03.430469+00:00'
+  anchor_date: '2023-01-25T18:42:30.018395+00:00'
   timezone: UTC
 infra_overrides: {}
 
@@ -42,3 +44,4 @@ parameter_openapi_schema:
   properties: {}
   required: null
   definitions: null
+timestamp: '2023-01-25T18:42:31.166811+00:00'

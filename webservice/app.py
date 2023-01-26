@@ -5,21 +5,30 @@ import pandas as pd
 import numpy as np
 from datetime import datetime as dt
 from datetime import timedelta
-import xgboost as xgb
+
+import matplotlib.pyplot as plt
 
 from feature_engine import encoding as ce
 from feature_engine import imputation as mdi
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 
+import xgboost as xgb
+import shap
+
 import mlflow
 
 import streamlit as st
+import streamlit.components.v1 as components
 st.set_page_config(layout="wide")
 
+from PIL import Image
 
 LOGGED_MODEL = 'model_config'
 LOOKUP_TABLE_PATH = 'lookup_table'
+MODEL_ATTRIB_PATH = 'model_data'
+IMAGE_PATH = 'images'
+IMAGE_NAME = 'online_pred_' + str(dt.today().date()) + '.jpg'
 NA_VALUES = ['', 'NA', 'N/A', 'NULL', 'null', '?', '*', '#N/A', '#VALUE!']
 POLICY_DTYPE_DICT = {'policy_number': 'str'}
 DATE_COLS = ['proposal_received_date', 'policy_issue_date']
@@ -32,8 +41,16 @@ MISSING_COLS = ['agent_persistency']
 ONE_HOT_COLS = ['owner_gender', 'marital_status', 'smoker', 'medical', 'education', 'occupation', 'payment_freq',  
                 'agent_status', 'agent_education']
 
-LOADING_ERR = KeyError("""The app encountered a problem in initializing the data. 
-Try to reload the page. If the problem persists, contact tanmoyhalder123@gmail.com""")
+FEATURES = ['owner_age', 'owner_gender', 'marital_status', 'num_nominee', 'smoker',
+       'medical', 'education', 'occupation', 'experience', 'income',
+       'negative_zipcode', 'family_member', 'existing_num_policy',
+       'has_critical_health_history', 'policy_term', 'payment_freq',
+       'annual_premium', 'sum_insured', 'agent_status', 'agent_education',
+       'agent_age', 'agent_tenure_days', 'agent_persistency',
+       'last_6_month_submissions', 'average_premium', 'is_reinstated',
+       'prev_persistency', 'num_complaints', 'target_completion_perc',
+       'has_contacted_in_last_6_months', 'credit_score',
+       'time_to_issue', 'prem_to_income_ratio']
 
 def load_model():
 
@@ -42,6 +59,18 @@ def load_model():
             model_input_pipe = pickle.load(f_in)
 
     return xgboost_model, model_input_pipe
+
+def load_train_data_attribs():
+
+    feat_df = pd.read_parquet(os.path.join(MODEL_ATTRIB_PATH, 'feat_df.parquet'))
+
+    with open(os.path.join(MODEL_ATTRIB_PATH, "X_train_trf.b"), "rb") as f_in:
+            X_train_trf = pickle.load(f_in)
+    
+    with open(os.path.join(MODEL_ATTRIB_PATH, "xgb_explainer.b"), "rb") as f_in:
+            explainer = pickle.load(f_in)
+
+    return feat_df, X_train_trf, explainer
 
 def load_non_policy_lookup_table():
 
@@ -112,6 +141,37 @@ def create_final_input_batch(policy_df, policy_tbl):
                 model_clean_df = clean_data_batch(model_merge_df2)
 
                 return model_clean_df
+
+
+def create_image_df(model_input_pipe, model_input):
+
+    model_final_features = model_input_pipe.get_feature_names_out(input_features= FEATURES)
+
+    out_feature_list = []
+    for f in range(0, len(model_final_features)):
+        feat = 'f' + str(f)
+        out_feature_list.append(feat)
+
+    feat_df = pd.DataFrame(data = model_final_features, index = out_feature_list, columns= ['feature_names'])
+    # feat_df
+    plot_df = pd.DataFrame(model_input, columns= feat_df['feature_names'].to_list())
+    return plot_df     
+
+
+def create_save_shap_plot(explainer, plot_df, path, image_name):
+        shap_values = explainer.shap_values(plot_df)
+        expected_value = explainer.expected_value
+
+        explainer_img = shap.plots._waterfall.waterfall_legacy(expected_value, 
+                                                        shap_values[0], 
+                                                        features = plot_df.squeeze(), 
+                                                        feature_names = plot_df.columns, 
+                                                        max_display = 15, 
+                                                        show=False)
+
+        plt.tight_layout()
+        explainer_img.savefig(os.path.join(path, image_name))
+
 
 
 def main():
@@ -249,32 +309,69 @@ def main():
 
         preproc_df = pd.DataFrame(app_input_dict, index = [0])
 
+        button_col1, button_col2, button_col3 = st.columns([1,1,1])
 
-        if st.button("Predict"):
-            prediction_label = {'NO. The customer is NOT going to renew the policy': 1, 'YES. The customer is going to renew the policy': 0}
+        with button_col1:
 
-            xgboost_model, model_input_pipe = load_model()
-            
-            model_clean_df = create_final_input_online(preproc_df)
-            model_trf_df = model_input_pipe.transform(model_clean_df)
-            model_input = xgb.DMatrix(model_trf_df)
+            if st.button("Predict"):
+                prediction_label = {'NO. The customer is NOT going to renew the policy': 1, 'YES. The customer is going to renew the policy': 0}
 
-            predicted_prob = xgboost_model.predict(model_input)
+                xgboost_model, model_input_pipe = load_model()
+                
+                model_clean_df = create_final_input_online(preproc_df)
+                model_trf_df = model_input_pipe.transform(model_clean_df)
+                # model_input = xgb.DMatrix(model_trf_df)
+                model_input = model_trf_df.copy()
 
-            if predicted_prob >= 0.5:
-                prediction = 1
-            else:
-                prediction = 0
+                prediction = xgboost_model.predict(model_input)
+                predicted_prob = xgboost_model.predict_proba(model_input).astype('float')
 
-            final_result = get_key(prediction, prediction_label)
-            if prediction == 1:
-                st.error(final_result)
-                st.error(f"The probability of the customer not paying the premium is {round(predicted_prob[0]*100,0)}%")
-            else:
-                st.success(final_result) 
-                st.success(f"The probability of the customer not paying the premium is {round(predicted_prob[0]*100,0)}%") 
-        else:
-            pass
+
+                # if predicted_prob >= 0.5:
+                #     prediction = 1
+                # else:
+                #     prediction = 0
+
+                final_result = get_key(prediction, prediction_label)
+                if prediction == 1:
+                    st.error(final_result)
+                    if (predicted_prob[0,1] > .5) and (predicted_prob[0,1] < .7):
+                        st.info(f"The probability of the customer not paying the premium is **{np.round(predicted_prob[0,1]*100,0)}%**. There is a low confidence in the output. Please see the explanation below !!!")
+                    elif predicted_prob[0,1] >= .7:
+                        st.info(f"The probability of the customer not paying the premium is **{np.round(predicted_prob[0,1]*100,0)}%**. There is a high confidence in the output. Please see the explanation below !!!")
+
+                else:
+                    st.success(final_result) 
+                    if (predicted_prob[0,0] > .5) and (predicted_prob[0,0] < .7):
+                        st.info(f"The probability of the customer paying the premium is **{np.round(predicted_prob[0,0]*100,0)}%**. There is a low confidence in the output. Please see the explanation below !!!")
+                    elif predicted_prob[0,0] >= .7:
+                        st.info(f"The probability of the customer paying the premium is **{np.round(predicted_prob[0,0]*100,0)}%**. There is a high confidence in the output. Please see the explanation below !!!")
+
+        with button_col2:
+
+            if st.button('Explain the result'):
+                with st.spinner('Calculating...'):
+
+                    feat_df, X_train_trf, explainer = load_train_data_attribs()
+                    xgboost_model, model_input_pipe = load_model()
+                    model_clean_df = create_final_input_online(preproc_df)
+                    model_trf_df = model_input_pipe.transform(model_clean_df)
+                    model_input = model_trf_df.copy()   
+
+                    plot_df = create_image_df(model_input_pipe, model_input)
+
+                    create_save_shap_plot(explainer, plot_df, path = IMAGE_PATH, image_name = IMAGE_NAME)
+
+                    image = Image.open(os.path.join(IMAGE_PATH, IMAGE_NAME))
+                    st.image(image, 
+                                caption='Shapley Waterfall chart for the customer explaining the factors impacting the decision',
+                                use_column_width =  False)
+
+        with button_col3:
+
+            if st.button('Show Values'):
+                model_clean_df = create_final_input_online(preproc_df)
+                st.dataframe(model_clean_df.squeeze())
 
     else:
 

@@ -10,10 +10,10 @@ flavors:
   xgboost:
     code: null
     data: model.None
-    model_class: xgboost.core.Booster
+    model_class: xgboost.sklearn.XGBClassifier
     model_format: null
     xgb_version: 1.7.3
 mlflow_version: 2.1.1
-model_uuid: 4abc9561d14646749ab32d54fa84f2f9
-run_id: cc72443e8df74931bdb75b91d503af7c
-utc_time_created: '2023-01-13 16:56:32.630176'
+model_uuid: 98745465f5a946c293f11ec7cd9a9d4e
+run_id: 51f002c6c39e4baaae119815cb262aca
+utc_time_created: '2023-01-26 11:04:55.135366'
