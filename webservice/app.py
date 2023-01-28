@@ -186,10 +186,12 @@ def main():
 
     st.markdown(html_templ,unsafe_allow_html=True)
 
-    activity = ["Online Prediction","Batch Prediction"]
-    choice = st.sidebar.selectbox("Choose Service Type", activity)
+    # activity = ["Online Prediction","Batch Prediction"]
+    # choice = st.sidebar.selectbox("Choose Service Type", activity)
 
-    if choice == "Online Prediction":
+    tab1 , tab2 = st.tabs(['Online Prediction', 'Batch Prediction'])
+    # if choice == "Online Prediction":
+    with tab1:
 
         st.subheader("Prediction Service for a Single Customer")
 
@@ -309,11 +311,11 @@ def main():
 
         preproc_df = pd.DataFrame(app_input_dict, index = [0])
 
-        button_col1, button_col2, button_col3 = st.columns([1,1,1])
+        online_button_col1, online_button_col2, online_button_col3 = st.columns([1,1,1])
 
-        with button_col1:
+        with online_button_col1:
 
-            if st.button("Predict"):
+            if st.button("Predict for this customer"):
                 prediction_label = {'NO. The customer is NOT going to renew the policy': 1, 'YES. The customer is going to renew the policy': 0}
 
                 xgboost_model, model_input_pipe = load_model()
@@ -347,7 +349,7 @@ def main():
                     elif predicted_prob[0,0] >= .7:
                         st.info(f"The probability of the customer paying the premium is **{np.round(predicted_prob[0,0]*100,0)}%**. There is a high confidence in the output. Please see the explanation below !!!")
 
-        with button_col2:
+        with online_button_col2:
 
             if st.button('Explain the result'):
                 with st.spinner('Calculating...'):
@@ -367,44 +369,93 @@ def main():
                                 caption='Shapley Waterfall chart for the customer explaining the factors impacting the decision',
                                 use_column_width =  False)
 
-        with button_col3:
+        with online_button_col3:
 
             if st.button('Show Values'):
                 model_clean_df = create_final_input_online(preproc_df)
                 st.dataframe(model_clean_df.squeeze())
 
-    else:
+    # else:
+    with tab2:
 
         st.subheader("Prediction Service for a Batch of Customers")
 
         file = st.file_uploader("Please Upload a File with Policy Numbers   (The algorithm will fetch details of all customers in this list from the database)",
                                 help = "Please see here for the required file format required in policy batch file upload.")
-
-        if st.button("Predict"):
-
-            xgboost_model, model_input_pipe = load_model()
-            policy_df = pd.read_csv(file, dtype = POLICY_DTYPE_DICT)
-
-            policy_tbl = load_policy_lookup_table()
-            model_clean_df = create_final_input_batch(policy_df, policy_tbl)
-            model_trf_df = model_input_pipe.transform(model_clean_df)
-            model_input = xgb.DMatrix(model_trf_df)
-
-            predicted_prob = np.round(xgboost_model.predict(model_input), 2)
-
-            predicted_prob_df = pd.DataFrame(predicted_prob, columns = ['probabilities'])
-
-            output_df = pd.concat([policy_df, predicted_prob_df], axis = 1)
-            output_df['policy_renewal_prediction'] = np.where(output_df['probabilities'] >= 0.5, "No", "Yes")
-
-            st.write(output_df)
-
-            # timestamp = pd.Timestamp.today()
-            st.download_button(label = 'Download CSV', data = output_df.to_csv(), mime = 'text/csv')
-
-        else:
-            pass
         
+        if file is not None:
+        
+            policy_df = pd.read_csv(file, dtype = POLICY_DTYPE_DICT)
+            # if file is None:
+            #     st.warning('Please upload a file')
+            # else:
+            #     policy_df = pd.read_csv(file, dtype = POLICY_DTYPE_DICT)
+            policy_id_tp = tuple(list(policy_df['policy_number'].drop_duplicates().values))
+
+
+            if st.button("Predict for all the customers"):
+
+                xgboost_model, model_input_pipe = load_model()
+
+                if file is not None:
+                    file.seek(0)
+                    policy_df = pd.read_csv(file, dtype = POLICY_DTYPE_DICT)
+                policy_id_tp = tuple(list(policy_df['policy_number'].drop_duplicates().values))
+
+                policy_tbl = load_policy_lookup_table()
+                model_clean_df = create_final_input_batch(policy_df, policy_tbl)
+                model_trf_df = model_input_pipe.transform(model_clean_df)
+                model_input = model_trf_df.copy()
+
+                predicted_prob = xgboost_model.predict_proba(model_input)[:, 1]
+                
+                predicted_prob_df = pd.DataFrame(predicted_prob, columns = ['probability of lapse'])
+                output_df = pd.concat([policy_df, predicted_prob_df], axis = 1)
+                output_df['model_decision'] = np.where(output_df['probability of lapse'] > .5, "No Renewal", "Renewal")
+
+                st.download_button(label = 'Download Result CSV', data = output_df.to_csv(), mime = 'text/csv')
+            
+            selected_policy = st.selectbox("Select a Policy Number for Explanation",
+                                    policy_id_tp,
+                                    help = "Please select a Policy Number from the dropdown.")
+
+
+            batch_button_col1, batch_button_col2 = st.columns([1,1])
+            
+            with batch_button_col1:
+
+                if st.button('Explain the result for the selected policy'):
+                    with st.spinner('Calculating...'):
+
+                        feat_df, X_train_trf, explainer = load_train_data_attribs()
+                        xgboost_model, model_input_pipe = load_model()
+                        policy_tbl = load_policy_lookup_table()
+                        policy_selected_df = policy_df.loc[policy_df['policy_number'] == selected_policy]
+                        model_clean_df = create_final_input_batch(policy_selected_df, policy_tbl)
+                        model_trf_df = model_input_pipe.transform(model_clean_df)
+                        model_input = model_trf_df.copy()
+
+                        plot_df = create_image_df(model_input_pipe, model_input)
+
+                        create_save_shap_plot(explainer, plot_df, path = IMAGE_PATH, image_name = IMAGE_NAME)
+
+                        image = Image.open(os.path.join(IMAGE_PATH, IMAGE_NAME))
+                        st.image(image, 
+                                    caption='Shapley Waterfall chart for the customer explaining the factors impacting the decision',
+                                    use_column_width =  False)
+
+            with batch_button_col2:
+
+                if st.button('Show Values for the selected policy'):
+                    policy_tbl = load_policy_lookup_table()
+                    model_clean_df = create_final_input_batch(policy_df, policy_tbl)
+                    model_clean_df = model_clean_df.reset_index()
+                    model_clean_df = model_clean_df.rename(columns = {0: 'policy_number'})
+                    output_df = model_clean_df.loc[model_clean_df['policy_number'] == selected_policy]
+                    st.dataframe(output_df.squeeze())
+        else:
+
+            st.warning('Please upload a file with policy numbers !!!')
                       
 if __name__ == "__main__":
     main()
