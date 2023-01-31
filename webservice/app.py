@@ -24,6 +24,9 @@ st.set_page_config(layout="wide")
 
 from PIL import Image
 
+# from utils import load_model, load_train_data_attribs
+# from config import LOGGED_MODEL, 
+
 LOGGED_MODEL = 'model_config'
 LOOKUP_TABLE_PATH = 'lookup_table'
 MODEL_ATTRIB_PATH = 'model_data'
@@ -315,7 +318,7 @@ def main():
 
         with online_button_col1:
 
-            if st.button("Predict for this customer"):
+            if st.button("Predict for this customer "):
                 prediction_label = {'NO. The customer is NOT going to renew the policy': 1, 'YES. The customer is going to renew the policy': 0}
 
                 xgboost_model, model_input_pipe = load_model()

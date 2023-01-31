@@ -24,6 +24,7 @@ streamlit = "*"
 shap = "*"
 lime = "*"
 pillow = "*"
+psycopg2 = "*"
 
 [dev-packages]
 pytest = "*"
