@@ -1,0 +1,24 @@
+---
+LOGGED_MODEL : "model_config"
+LOOKUP_TABLE_PATH : "lookup_table"
+MODEL_ATTRIB_PATH : "model_data"
+IMAGE_PATH : "images"
+POLICY_DTYPE_DICT : {'policy_number': 'str'}
+DATE_COLS : ['proposal_received_date', 'policy_issue_date']
+NA_VALUES : ['', 'NA', 'N/A', 'NULL', 'null', '?', '*', '#N/A', '#VALUE!']
+AGENT_DTYPE_DICT : {'agent_code': 'str'}
+ZIPCODE_DTYPE_DICT : {'zipcode': 'str'}
+COLS_TO_REM_ONLINE : ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code', 'agent_dob', 'agent_doj']
+COLS_TO_REM_BATCH : ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code']
+MISSING_COLS : ['agent_persistency']
+ONE_HOT_COLS : ['owner_gender', 'marital_status', 'smoker', 'medical', 'education', 'occupation', 'payment_freq', 'agent_status', 'agent_education']
+FEATURES : ['owner_age', 'owner_gender', 'marital_status', 'num_nominee', 'smoker',
+       'medical', 'education', 'occupation', 'experience', 'income',
+       'negative_zipcode', 'family_member', 'existing_num_policy',
+       'has_critical_health_history', 'policy_term', 'payment_freq',
+       'annual_premium', 'sum_insured', 'agent_status', 'agent_education',
+       'agent_age', 'agent_tenure_days', 'agent_persistency',
+       'last_6_month_submissions', 'average_premium', 'is_reinstated',
+       'prev_persistency', 'num_complaints', 'target_completion_perc',
+       'has_contacted_in_last_6_months', 'credit_score',
+       'time_to_issue', 'prem_to_income_ratio']
