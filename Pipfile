@@ -25,6 +25,8 @@ shap = "*"
 lime = "*"
 pillow = "*"
 psycopg2 = "*"
+millify = "*"
+plotly = "*"
 
 [dev-packages]
 pytest = "*"
