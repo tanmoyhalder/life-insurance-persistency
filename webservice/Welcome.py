@@ -122,38 +122,4 @@ if st.session_state["Deployment Button Status"]:
 else:
 	pass
 
-# if "Contact Button Status" not in st.session_state:
-#     st.session_state["Contact Button Status"] = False
-
-# st.button(
-#     "Contact Us",
-#     on_click = click_fn,
-#     kwargs = {"which": "Contact Button Status"},
-# )
-# if st.session_state["Contact Button Status"]:
-# 	Deployment_html_templ = """
-# 	<div>
-# 		<body>
-# 			<p style ="color: white";>
-# 				Contact EY GDS D&A Team to report any issue with this app or to know more details 
-# 				<li> Aparna Mishra - AI Leader</li>
-# 				<li> Tanmoy Halder - Senior Data Scientist</li>
-# 				<li> Sharvesh Sekar - Data Scientist</li>
-# 			</p>
-# 		</body>	
-# 	</div>
-# 	"""
-# 	st.markdown(Deployment_html_templ, unsafe_allow_html=True)
-
-
-# st.write("")
-# st.write("")
-# st.write("")
-# st.write("")
-# st.write("")
-# st.write("")
-# st.write("")
-
-# st.write("Contact EY GDS D&A Team to report any issue with this app or to know more details")
-
 st.sidebar.success("Select an option above")
