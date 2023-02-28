@@ -8,8 +8,8 @@ DATE_COLS : ['proposal_received_date', 'policy_issue_date']
 NA_VALUES : ['', 'NA', 'N/A', 'NULL', 'null', '?', '*', '#N/A', '#VALUE!']
 AGENT_DTYPE_DICT : {'agent_code': 'str'}
 ZIPCODE_DTYPE_DICT : {'zipcode': 'str'}
-COLS_TO_REM_ONLINE : ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code', 'agent_dob', 'agent_doj']
-COLS_TO_REM_BATCH : ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code']
+COLS_TO_REM : ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code', 'agent_dob', 'agent_doj']
+# COLS_TO_REM_BATCH : ['proposal_received_date','policy_issue_date', 'zipcode', 'county', 'state', 'agent_code']
 MISSING_COLS : ['agent_persistency']
 ONE_HOT_COLS : ['owner_gender', 'marital_status', 'smoker', 'medical', 'education', 'occupation', 'payment_freq', 'agent_status', 'agent_education']
 FEATURES : ['owner_age', 'owner_gender', 'marital_status', 'num_nominee', 'smoker',
@@ -32,4 +32,4 @@ COLUMN_MAPPING : {'Education':'education', 'Occupation':'occupation','Smoker':'s
                   'Number Complaints':'num_complaints', 'Agent Status':'agent_status', 'Agent Education':'agent_education', 
                   'Target Completion Percentage':'target_completion_perc','Number of Nominees':'num_nominee','Underwent Medical Test?': 'medical', 
                   'Number of Family Members': 'family_member', 'Number Existing Policies': 'existing_num_policy', 
-                  'Has Critical Health History?' : 'has_critical_health_history'}
+                  'Has Critical Health History?' : 'has_critical_health_history', 'Pred Lapse':'pred_lapse'}

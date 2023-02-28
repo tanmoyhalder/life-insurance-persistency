@@ -27,6 +27,13 @@ pillow = "*"
 psycopg2 = "*"
 millify = "*"
 plotly = "*"
+cloud-sql-python-connector = {extras = ["pg8000"], version = "*"}
+sqlalchemy = "==2.0.2"
+google-auth = "*"
+mysql-connector-python-rf = "*"
+mysql-connector-python = "*"
+mysqlclient = "*"
+python-dotenv = "*"
 
 [dev-packages]
 pytest = "*"
